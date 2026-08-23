@@ -1,8 +1,10 @@
 package com.rodrigo.misprecios.notifications
 
+import java.awt.Desktop
 import java.awt.SystemTray
 import java.awt.TrayIcon
 import java.awt.image.BufferedImage
+import java.net.URI
 import java.text.NumberFormat
 import kotlin.math.abs
 
@@ -14,6 +16,9 @@ import kotlin.math.abs
 object NotificationHelper {
 
     private var trayIcon: TrayIcon? = null
+
+    /** Guarda el link del último cambio de precio para poder abrirlo al hacer clic en el ícono. */
+    private var lastUrl: String? = null
 
     fun init() {
         if (!SystemTray.isSupported()) return
@@ -28,6 +33,9 @@ object NotificationHelper {
 
         val icon = TrayIcon(image, "Mis Precios")
         icon.isImageAutoSize = true
+        icon.addActionListener {
+            lastUrl?.let { openUrl(it) }
+        }
         runCatching {
             SystemTray.getSystemTray().add(icon)
             trayIcon = icon
@@ -38,16 +46,28 @@ object NotificationHelper {
         productName: String,
         oldPrice: Double,
         newPrice: Double,
-        currencySymbol: String
+        currencySymbol: String,
+        productUrl: String
     ) {
         val icon = trayIcon ?: return
+        lastUrl = productUrl
+
         val isDrop = newPrice < oldPrice
         val format = NumberFormat.getNumberInstance()
         val diff = abs(newPrice - oldPrice)
         val title = if (isDrop) "💰 ¡Bajó de precio!" else "📈 Subió de precio"
         val body = "$productName: $currencySymbol${format.format(oldPrice)} → " +
-            "$currencySymbol${format.format(newPrice)} (${if (isDrop) "-" else "+"}$currencySymbol${format.format(diff)})"
+            "$currencySymbol${format.format(newPrice)} (${if (isDrop) "-" else "+"}$currencySymbol${format.format(diff)})\n" +
+            "(Doble clic en el ícono de la bandeja para abrir la tienda)"
 
         icon.displayMessage(title, body, TrayIcon.MessageType.INFO)
+    }
+
+    fun openUrl(url: String) {
+        runCatching {
+            if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
+                Desktop.getDesktop().browse(URI(url))
+            }
+        }
     }
 }

@@ -68,7 +68,8 @@ object Repository {
                         productName = updated.alias,
                         oldPrice = product.currentPrice,
                         newPrice = scraped.price,
-                        currencySymbol = updated.currencySymbol
+                        currencySymbol = updated.currencySymbol,
+                        productUrl = updated.url
                     )
                 }
             } else {

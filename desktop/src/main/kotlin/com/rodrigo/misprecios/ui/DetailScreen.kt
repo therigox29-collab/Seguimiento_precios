@@ -12,6 +12,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -35,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import com.rodrigo.misprecios.data.PriceHistoryEntry
 import com.rodrigo.misprecios.data.Product
 import com.rodrigo.misprecios.data.Repository
+import com.rodrigo.misprecios.notifications.NotificationHelper
 import kotlinx.coroutines.launch
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
@@ -98,6 +100,13 @@ fun DetailScreen(productId: Long, onBack: () -> Unit) {
                 style = MaterialTheme.typography.headlineLarge,
                 fontWeight = FontWeight.ExtraBold
             )
+
+            Button(
+                onClick = { NotificationHelper.openUrl(currentProduct.url) },
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+            ) {
+                Text("Abrir en la tienda ↗")
+            }
 
             val previous = currentProduct.previousPrice
             if (previous != null && previous != currentProduct.currentPrice) {
