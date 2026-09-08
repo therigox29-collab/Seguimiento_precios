@@ -29,6 +29,27 @@ jobs:
       - name: Create runnable app folder (siempre funciona)
         run: gradle createDistributable --no-daemon
 
+      - name: Verify the app image is complete
+        shell: pwsh
+        run: |
+          $appRoot = Get-ChildItem "build\compose\binaries\main\app" -Directory | Select-Object -First 1
+          Write-Host "Carpeta de la app: $($appRoot.FullName)"
+
+          $jvmDll = Get-ChildItem "$($appRoot.FullName)\runtime" -Recurse -Filter "jvm.dll" -ErrorAction SilentlyContinue
+          if (-not $jvmDll) {
+            Write-Error "jvm.dll NO está en el runtime generado. El paquete quedó incompleto."
+            Get-ChildItem "$($appRoot.FullName)\runtime" -Recurse | Select-Object -First 30 | Format-Table FullName, Length
+            exit 1
+          }
+          Write-Host "jvm.dll encontrado en: $($jvmDll.FullName)"
+
+          $sizeMB = [math]::Round((Get-ChildItem "$($appRoot.FullName)" -Recurse | Measure-Object -Property Length -Sum).Sum / 1MB, 1)
+          Write-Host "Tamaño total del app image: $sizeMB MB"
+          if ($sizeMB -lt 80) {
+            Write-Error "El app image pesa solo $sizeMB MB, algo quedó afuera (debería pesar 100+ MB)."
+            exit 1
+          }
+
       - name: Create Windows installer .exe (puede fallar si falta WiX; no es grave)
         run: gradle packageExe --no-daemon
         continue-on-error: true
