@@ -2,7 +2,10 @@ package com.rodrigo.misprecios.notifications
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -48,7 +51,8 @@ class NotificationHelper(private val context: Context) {
         productName: String,
         oldPrice: Double,
         newPrice: Double,
-        currencySymbol: String
+        currencySymbol: String,
+        productUrl: String
     ) {
         val isDrop = newPrice < oldPrice
         val format = NumberFormat.getNumberInstance()
@@ -57,6 +61,15 @@ class NotificationHelper(private val context: Context) {
         val body = "$productName: $currencySymbol${format.format(oldPrice)} → " +
             "$currencySymbol${format.format(newPrice)} (${if (isDrop) "-" else "+"}$currencySymbol${format.format(diff)})"
 
+        // Al tocar la notificación se abre directo la página del producto en el navegador.
+        val openIntent = Intent(Intent.ACTION_VIEW, Uri.parse(productUrl))
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            productId.toInt(),
+            openIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
         val notification = NotificationCompat.Builder(context, PRICE_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
@@ -64,6 +77,7 @@ class NotificationHelper(private val context: Context) {
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
+            .setContentIntent(pendingIntent)
             .build()
 
         if (androidx.core.content.ContextCompat.checkSelfPermission(
