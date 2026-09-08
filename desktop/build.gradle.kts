@@ -35,6 +35,12 @@ compose.desktop {
             targetFormats(TargetFormat.Msi, TargetFormat.Exe)
             packageName = "MisPrecios"
             packageVersion = "1.0.0"
+
+            // El set de módulos automático de Compose Desktop no incluye java.sql,
+            // que es lo que usa sqlite-jdbc para hablar con la base de datos local.
+            // Sin este módulo la JVM ni siquiera llega a arrancar ("Failed to launch JVM").
+            modules("java.sql", "java.naming", "jdk.unsupported")
+
             windows {
                 menuGroup = "MisPrecios"
                 perUserInstall = true
