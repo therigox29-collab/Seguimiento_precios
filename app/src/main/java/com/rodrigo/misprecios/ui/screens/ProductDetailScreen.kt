@@ -1,5 +1,7 @@
 package com.rodrigo.misprecios.ui.screens
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -11,6 +13,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -28,6 +31,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
@@ -47,6 +51,7 @@ fun ProductDetailScreen(viewModel: AppViewModel, productId: Long, onBack: () -> 
     val history by viewModel.observeHistory(productId).collectAsState(initial = emptyList())
     val format = NumberFormat.getNumberInstance()
     val dateFormat = remember { SimpleDateFormat("dd MMM, HH:mm", Locale("es")) }
+    val context = LocalContext.current
 
     Scaffold(
         topBar = {
@@ -100,6 +105,19 @@ fun ProductDetailScreen(viewModel: AppViewModel, productId: Long, onBack: () -> 
                 style = MaterialTheme.typography.headlineLarge,
                 fontWeight = FontWeight.ExtraBold
             )
+
+            Button(
+                onClick = {
+                    runCatching {
+                        context.startActivity(
+                            Intent(Intent.ACTION_VIEW, Uri.parse(currentProduct.url))
+                        )
+                    }
+                },
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+            ) {
+                Text("Abrir en la tienda ↗")
+            }
 
             val previous = currentProduct.previousPrice
             if (previous != null && previous != currentProduct.currentPrice) {
