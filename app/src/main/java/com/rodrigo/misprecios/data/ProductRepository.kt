@@ -33,7 +33,8 @@ class ProductRepository(context: Context) {
             currentPrice = scraped.price,
             previousPrice = null,
             currencySymbol = scraped.currencySymbol,
-            lastCheckedAt = now
+            lastCheckedAt = now,
+            inStock = scraped.inStock
         )
         val id = dao.insert(product)
         dao.insertHistory(PriceHistoryEntry(productId = id, price = scraped.price, checkedAt = now))
@@ -44,8 +45,8 @@ class ProductRepository(context: Context) {
 
     /**
      * Revisa todos los productos guardados: consulta el precio actual, lo compara con el
-     * último guardado y, si cambió, actualiza la base y dispara una notificación.
-     * Devuelve la cantidad de productos cuyo precio cambió.
+     * último guardado y, si cambió (precio o disponibilidad), actualiza la base y dispara
+     * una notificación. Devuelve la cantidad de productos cuyo precio cambió.
      */
     suspend fun checkAllPrices(): Int {
         val products = dao.getAll()
@@ -56,29 +57,49 @@ class ProductRepository(context: Context) {
             val scraped = runCatching { PriceScraper.fetch(product.url) }.getOrNull() ?: continue
             val now = System.currentTimeMillis()
 
-            if (scraped.price != product.currentPrice) {
+            val priceChanged = scraped.price != product.currentPrice
+            val backInStock = !product.inStock && scraped.inStock
+            val stockChanged = product.inStock != scraped.inStock
+
+            if (priceChanged || stockChanged) {
                 val updated = product.copy(
-                    previousPrice = product.currentPrice,
+                    previousPrice = if (priceChanged) product.currentPrice else product.previousPrice,
                     currentPrice = scraped.price,
                     name = scraped.name,
                     imageUrl = scraped.imageUrl ?: product.imageUrl,
+                    inStock = scraped.inStock,
                     lastCheckedAt = now
                 )
                 dao.update(updated)
-                dao.insertHistory(PriceHistoryEntry(productId = product.id, price = scraped.price, checkedAt = now))
-                changedCount++
 
-                val isDrop = scraped.price < product.currentPrice
-                val shouldNotify = !settings.notifyOnlyOnDrop || isDrop
-                if (shouldNotify) {
-                    notificationHelper.showPriceChangeNotification(
+                if (priceChanged) {
+                    dao.insertHistory(PriceHistoryEntry(productId = product.id, price = scraped.price, checkedAt = now))
+                    changedCount++
+                }
+
+                if (backInStock) {
+                    // Volvió a tener stock: esto es más relevante que un simple cambio de precio,
+                    // así que avisamos sin importar el ajuste de "solo avisar si baja".
+                    notificationHelper.showBackInStockNotification(
                         productId = product.id,
                         productName = updated.alias,
-                        oldPrice = product.currentPrice,
-                        newPrice = scraped.price,
+                        price = scraped.price,
                         currencySymbol = updated.currencySymbol,
                         productUrl = updated.url
                     )
+                } else if (priceChanged) {
+                    val isDrop = scraped.price < product.currentPrice
+                    val shouldNotify = !settings.notifyOnlyOnDrop || isDrop
+                    if (shouldNotify) {
+                        notificationHelper.showPriceChangeNotification(
+                            productId = product.id,
+                            productName = updated.alias,
+                            oldPrice = product.currentPrice,
+                            newPrice = scraped.price,
+                            currencySymbol = updated.currencySymbol,
+                            productUrl = updated.url
+                        )
+                    }
                 }
             } else {
                 dao.update(product.copy(lastCheckedAt = now))
