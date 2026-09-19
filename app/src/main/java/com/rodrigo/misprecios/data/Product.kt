@@ -16,5 +16,6 @@ data class Product(
     val previousPrice: Double?,
     val currencySymbol: String,
     val lastCheckedAt: Long,
-    val notifyOnlyOnDrop: Boolean = false
+    val notifyOnlyOnDrop: Boolean = false,
+    val inStock: Boolean = true
 )
