@@ -1,6 +1,8 @@
 package com.rodrigo.misprecios.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -9,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
@@ -94,6 +97,23 @@ fun DetailScreen(productId: Long, onBack: () -> Unit) {
             Spacer(modifier = Modifier.height(12.dp))
 
             Text(currentProduct.name, fontWeight = FontWeight.SemiBold)
+
+            if (!currentProduct.inStock) {
+                Box(
+                    modifier = Modifier
+                        .padding(top = 6.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(ErrorRed.copy(alpha = 0.15f))
+                        .padding(horizontal = 8.dp, vertical = 3.dp)
+                ) {
+                    Text(
+                        "Agotado en este momento",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = ErrorRed,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
 
             Text(
                 "${currentProduct.currencySymbol}${format.format(currentProduct.currentPrice)}",
