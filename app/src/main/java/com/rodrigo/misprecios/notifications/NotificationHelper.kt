@@ -88,6 +88,43 @@ class NotificationHelper(private val context: Context) {
         }
     }
 
+    fun showBackInStockNotification(
+        productId: Long,
+        productName: String,
+        price: Double,
+        currencySymbol: String,
+        productUrl: String
+    ) {
+        val format = NumberFormat.getNumberInstance()
+        val title = "✅ ¡Volvió a tener stock!"
+        val body = "$productName ya está disponible: $currencySymbol${format.format(price)}"
+
+        val openIntent = Intent(Intent.ACTION_VIEW, Uri.parse(productUrl))
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            productId.toInt(),
+            openIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = NotificationCompat.Builder(context, PRICE_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(title)
+            .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .setContentIntent(pendingIntent)
+            .build()
+
+        if (androidx.core.content.ContextCompat.checkSelfPermission(
+                context, android.Manifest.permission.POST_NOTIFICATIONS
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED || Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU
+        ) {
+            NotificationManagerCompat.from(context).notify(productId.toInt(), notification)
+        }
+    }
+
     fun buildServiceNotification(intervalMinutes: Int): android.app.Notification {
         return NotificationCompat.Builder(context, SERVICE_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
