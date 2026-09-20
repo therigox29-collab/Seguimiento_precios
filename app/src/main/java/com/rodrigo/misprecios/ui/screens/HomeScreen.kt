@@ -1,5 +1,6 @@
 package com.rodrigo.misprecios.ui.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,9 +15,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -51,12 +54,23 @@ fun HomeScreen(
     onOpenProduct: (Long) -> Unit
 ) {
     val products by viewModel.products.collectAsState()
+    val isRefreshing by viewModel.isRefreshing.collectAsState()
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Mis Precios", fontWeight = FontWeight.SemiBold) },
                 actions = {
+                    IconButton(onClick = { viewModel.refreshNow() }, enabled = !isRefreshing) {
+                        if (isRefreshing) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Icon(Icons.Filled.Refresh, contentDescription = "Revisar ahora")
+                        }
+                    }
                     IconButton(onClick = onOpenSettings) {
                         Icon(Icons.Filled.Settings, contentDescription = "Ajustes")
                     }
@@ -122,11 +136,17 @@ private fun ProductRow(product: Product, onClick: () -> Unit) {
             )
 
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    product.alias,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1
-                )
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        product.alias,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    if (!product.inStock) {
+                        StockBadge()
+                    }
+                }
                 Text(
                     "${product.storeName} · ${timeAgo(product.lastCheckedAt)}",
                     style = MaterialTheme.typography.bodySmall,
@@ -158,6 +178,23 @@ private fun ProductRow(product: Product, onClick: () -> Unit) {
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun StockBadge() {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(6.dp))
+            .background(ErrorRed.copy(alpha = 0.15f))
+            .padding(horizontal = 6.dp, vertical = 2.dp)
+    ) {
+        Text(
+            "Agotado",
+            style = MaterialTheme.typography.labelSmall,
+            color = ErrorRed,
+            fontWeight = FontWeight.SemiBold
+        )
     }
 }
 
