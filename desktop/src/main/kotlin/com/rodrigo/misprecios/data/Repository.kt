@@ -27,7 +27,8 @@ object Repository {
             currentPrice = scraped.price,
             previousPrice = null,
             currencySymbol = scraped.currencySymbol,
-            lastCheckedAt = now
+            lastCheckedAt = now,
+            inStock = scraped.inStock
         )
         val id = Database.insertProduct(product)
         Database.insertHistory(PriceHistoryEntry(productId = id, price = scraped.price, checkedAt = now))
@@ -39,8 +40,8 @@ object Repository {
     }
 
     /**
-     * Revisa todos los productos, actualiza los que cambiaron de precio y dispara
-     * notificaciones. Devuelve la cantidad de productos que cambiaron.
+     * Revisa todos los productos, actualiza los que cambiaron de precio o disponibilidad
+     * y dispara notificaciones. Devuelve la cantidad de productos que cambiaron de precio.
      */
     suspend fun checkAllPrices(notifyOnlyOnDrop: Boolean): Int = withContext(Dispatchers.IO) {
         val products = Database.getAllProducts()
@@ -50,27 +51,45 @@ object Repository {
             val scraped = runCatching { PriceScraper.fetch(product.url) }.getOrNull() ?: continue
             val now = System.currentTimeMillis()
 
-            if (scraped.price != product.currentPrice) {
+            val priceChanged = scraped.price != product.currentPrice
+            val backInStock = !product.inStock && scraped.inStock
+
+            if (priceChanged || product.inStock != scraped.inStock) {
                 val updated = product.copy(
-                    previousPrice = product.currentPrice,
+                    previousPrice = if (priceChanged) product.currentPrice else product.previousPrice,
                     currentPrice = scraped.price,
                     name = scraped.name,
                     imageUrl = scraped.imageUrl ?: product.imageUrl,
+                    inStock = scraped.inStock,
                     lastCheckedAt = now
                 )
                 Database.updateProduct(updated)
-                Database.insertHistory(PriceHistoryEntry(productId = product.id, price = scraped.price, checkedAt = now))
-                changedCount++
 
-                val isDrop = scraped.price < product.currentPrice
-                if (!notifyOnlyOnDrop || isDrop) {
-                    NotificationHelper.showPriceChangeNotification(
+                if (priceChanged) {
+                    Database.insertHistory(PriceHistoryEntry(productId = product.id, price = scraped.price, checkedAt = now))
+                    changedCount++
+                }
+
+                if (backInStock) {
+                    // Volvió a tener stock: esto es más relevante que un simple cambio de precio,
+                    // así que avisamos sin importar el ajuste de "solo avisar si baja".
+                    NotificationHelper.showBackInStockNotification(
                         productName = updated.alias,
-                        oldPrice = product.currentPrice,
-                        newPrice = scraped.price,
+                        price = scraped.price,
                         currencySymbol = updated.currencySymbol,
                         productUrl = updated.url
                     )
+                } else if (priceChanged) {
+                    val isDrop = scraped.price < product.currentPrice
+                    if (!notifyOnlyOnDrop || isDrop) {
+                        NotificationHelper.showPriceChangeNotification(
+                            productName = updated.alias,
+                            oldPrice = product.currentPrice,
+                            newPrice = scraped.price,
+                            currencySymbol = updated.currencySymbol,
+                            productUrl = updated.url
+                        )
+                    }
                 }
             } else {
                 Database.updateProduct(product.copy(lastCheckedAt = now))
