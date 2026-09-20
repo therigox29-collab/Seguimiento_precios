@@ -10,7 +10,8 @@ data class Product(
     val currentPrice: Double,
     val previousPrice: Double?,
     val currencySymbol: String,
-    val lastCheckedAt: Long
+    val lastCheckedAt: Long,
+    val inStock: Boolean = true
 )
 
 data class PriceHistoryEntry(
