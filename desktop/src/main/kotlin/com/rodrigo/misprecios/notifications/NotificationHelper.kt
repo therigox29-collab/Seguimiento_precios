@@ -63,6 +63,23 @@ object NotificationHelper {
         icon.displayMessage(title, body, TrayIcon.MessageType.INFO)
     }
 
+    fun showBackInStockNotification(
+        productName: String,
+        price: Double,
+        currencySymbol: String,
+        productUrl: String
+    ) {
+        val icon = trayIcon ?: return
+        lastUrl = productUrl
+
+        val format = NumberFormat.getNumberInstance()
+        val title = "✅ ¡Volvió a tener stock!"
+        val body = "$productName ya está disponible: $currencySymbol${format.format(price)}\n" +
+            "(Doble clic en el ícono de la bandeja para abrir la tienda)"
+
+        icon.displayMessage(title, body, TrayIcon.MessageType.INFO)
+    }
+
     fun openUrl(url: String) {
         runCatching {
             if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
