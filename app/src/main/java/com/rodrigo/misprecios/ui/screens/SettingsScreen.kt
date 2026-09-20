@@ -1,5 +1,11 @@
 package com.rodrigo.misprecios.ui.screens
 
+import android.annotation.SuppressLint
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.PowerManager
+import android.provider.Settings as AndroidSettings
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -9,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -21,18 +28,43 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.rodrigo.misprecios.data.RefreshMode
 import com.rodrigo.misprecios.ui.AppViewModel
+import com.rodrigo.misprecios.ui.theme.SuccessGreen
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(viewModel: AppViewModel, onBack: () -> Unit) {
     val settings by viewModel.settings.collectAsState()
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var batteryExempt by remember { mutableStateOf(isIgnoringBatteryOptimizations(context)) }
+
+    // Cuando el usuario vuelve de la pantalla de Android donde acepta (o no) la excepción
+    // de batería, refrescamos el estado para mostrar el cartel correcto sin que tenga que
+    // salir y volver a entrar a Ajustes.
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                batteryExempt = isIgnoringBatteryOptimizations(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     Scaffold(
         topBar = {
@@ -148,6 +180,36 @@ fun SettingsScreen(viewModel: AppViewModel, onBack: () -> Unit) {
                 }
             }
 
+            // Optimización de batería
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Text("🔋 Optimización de batería", fontWeight = FontWeight.Bold)
+                    Text(
+                        "Muchos celulares (Xiaomi, Samsung, Huawei y otros) frenan las apps en " +
+                            "segundo plano para ahorrar batería, y eso puede hacer que el chequeo " +
+                            "de precios deje de correr sin avisarte. Este botón le pide a Android " +
+                            "que no restrinja Mis Precios.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp, bottom = 10.dp)
+                    )
+                    if (batteryExempt) {
+                        Text("✅ Ya está permitido", fontWeight = FontWeight.SemiBold, color = SuccessGreen)
+                    } else {
+                        Button(
+                            onClick = { requestIgnoreBatteryOptimizations(context) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Permitir que corra en segundo plano")
+                        }
+                    }
+                }
+            }
+
             // Notificaciones
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
@@ -177,4 +239,17 @@ fun SettingsScreen(viewModel: AppViewModel, onBack: () -> Unit) {
             }
         }
     }
+}
+
+private fun isIgnoringBatteryOptimizations(context: Context): Boolean {
+    val powerManager = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
+    return powerManager?.isIgnoringBatteryOptimizations(context.packageName) ?: true
+}
+
+@SuppressLint("BatteryLife")
+private fun requestIgnoreBatteryOptimizations(context: Context) {
+    val intent = Intent(AndroidSettings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+        data = Uri.parse("package:${context.packageName}")
+    }
+    runCatching { context.startActivity(intent) }
 }
