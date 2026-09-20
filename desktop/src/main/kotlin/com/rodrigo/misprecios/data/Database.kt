@@ -54,6 +54,11 @@ object Database {
                     )
                     """.trimIndent()
                 )
+                // Migración liviana: si la base ya existía de una versión anterior sin esta
+                // columna, la agregamos ahora. Si ya está, SQLite tira error y lo ignoramos.
+                runCatching {
+                    stmt.execute("ALTER TABLE products ADD COLUMN inStock INTEGER NOT NULL DEFAULT 1")
+                }
             }
         }
     }
@@ -77,8 +82,8 @@ object Database {
 
     fun insertProduct(product: Product): Long = connect().use { conn ->
         conn.prepareStatement(
-            "INSERT INTO products (url, alias, name, imageUrl, storeName, currentPrice, previousPrice, currencySymbol, lastCheckedAt) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO products (url, alias, name, imageUrl, storeName, currentPrice, previousPrice, currencySymbol, lastCheckedAt, inStock) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             Statement.RETURN_GENERATED_KEYS
         ).use { stmt ->
             stmt.setString(1, product.url)
@@ -90,6 +95,7 @@ object Database {
             if (product.previousPrice != null) stmt.setDouble(7, product.previousPrice) else stmt.setNull(7, java.sql.Types.REAL)
             stmt.setString(8, product.currencySymbol)
             stmt.setLong(9, product.lastCheckedAt)
+            stmt.setInt(10, if (product.inStock) 1 else 0)
             stmt.executeUpdate()
             val keys = stmt.generatedKeys
             if (keys.next()) keys.getLong(1) else 0L
@@ -99,7 +105,7 @@ object Database {
     fun updateProduct(product: Product) {
         connect().use { conn ->
             conn.prepareStatement(
-                "UPDATE products SET alias=?, name=?, imageUrl=?, storeName=?, currentPrice=?, previousPrice=?, currencySymbol=?, lastCheckedAt=? WHERE id=?"
+                "UPDATE products SET alias=?, name=?, imageUrl=?, storeName=?, currentPrice=?, previousPrice=?, currencySymbol=?, lastCheckedAt=?, inStock=? WHERE id=?"
             ).use { stmt ->
                 stmt.setString(1, product.alias)
                 stmt.setString(2, product.name)
@@ -109,7 +115,8 @@ object Database {
                 if (product.previousPrice != null) stmt.setDouble(6, product.previousPrice) else stmt.setNull(6, java.sql.Types.REAL)
                 stmt.setString(7, product.currencySymbol)
                 stmt.setLong(8, product.lastCheckedAt)
-                stmt.setLong(9, product.id)
+                stmt.setInt(9, if (product.inStock) 1 else 0)
+                stmt.setLong(10, product.id)
                 stmt.executeUpdate()
             }
         }
@@ -170,6 +177,7 @@ object Database {
         currentPrice = getDouble("currentPrice"),
         previousPrice = getObject("previousPrice") as? Double,
         currencySymbol = getString("currencySymbol"),
-        lastCheckedAt = getLong("lastCheckedAt")
+        lastCheckedAt = getLong("lastCheckedAt"),
+        inStock = runCatching { getInt("inStock") != 0 }.getOrDefault(true)
     )
 }
