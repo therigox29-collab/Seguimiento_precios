@@ -1,5 +1,6 @@
 package com.rodrigo.misprecios.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Settings
@@ -108,7 +110,17 @@ private fun ProductRow(product: Product, onClick: () -> Unit) {
             NetworkImage(url = product.imageUrl, modifier = Modifier.size(48.dp))
 
             Column(modifier = Modifier.weight(1f)) {
-                Text(product.alias, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        product.alias,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    if (!product.inStock) {
+                        StockBadge()
+                    }
+                }
                 Text(
                     "${product.storeName} · ${timeAgo(product.lastCheckedAt)}",
                     style = MaterialTheme.typography.bodySmall,
@@ -133,6 +145,23 @@ private fun ProductRow(product: Product, onClick: () -> Unit) {
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun StockBadge() {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(6.dp))
+            .background(ErrorRed.copy(alpha = 0.15f))
+            .padding(horizontal = 6.dp, vertical = 2.dp)
+    ) {
+        Text(
+            "Agotado",
+            style = MaterialTheme.typography.labelSmall,
+            color = ErrorRed,
+            fontWeight = FontWeight.SemiBold
+        )
     }
 }
 
