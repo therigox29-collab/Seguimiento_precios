@@ -32,6 +32,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val _previewState = MutableStateFlow<PreviewState>(PreviewState.Idle)
     val previewState: StateFlow<PreviewState> = _previewState
 
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing: StateFlow<Boolean> = _isRefreshing
+
     fun observeHistory(productId: Long) = repository.observeHistory(productId)
     fun observeProduct(productId: Long) = repository.observeById(productId)
 
@@ -61,8 +64,18 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { repository.deleteProduct(product) }
     }
 
+    /**
+     * Fuerza un chequeo inmediato de todos los productos, sin esperar al temporizador
+     * del modo rápido o del modo ahorro. Sirve para probar si el scraper detecta un
+     * cambio de precio sin tener que esperar minutos.
+     */
     fun refreshNow() {
-        viewModelScope.launch { repository.checkAllPrices() }
+        if (_isRefreshing.value) return
+        viewModelScope.launch {
+            _isRefreshing.value = true
+            runCatching { repository.checkAllPrices() }
+            _isRefreshing.value = false
+        }
     }
 
     fun setRefreshMode(mode: RefreshMode) {
