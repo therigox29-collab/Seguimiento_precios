@@ -5,7 +5,8 @@ data class ScrapedProduct(
     val price: Double,
     val currencySymbol: String,
     val imageUrl: String?,
-    val storeName: String
+    val storeName: String,
+    val inStock: Boolean = true
 )
 
 class ScrapeException(message: String) : Exception(message)
