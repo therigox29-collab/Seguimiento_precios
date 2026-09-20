@@ -76,14 +76,15 @@ object PriceScraper {
                         if (!type.contains("Product", ignoreCase = true)) continue
                         val name = node.optString("name").ifBlank { null } ?: continue
                         val offers = node.opt("offers")
-                        val (price, currency) = extractOffer(offers) ?: continue
+                        val offer = extractOffer(offers) ?: continue
                         val image = extractImage(node.opt("image"))
                         return ScrapedProduct(
                             name = name,
-                            price = price,
-                            currencySymbol = currency,
+                            price = offer.price,
+                            currencySymbol = offer.currencySymbol,
                             imageUrl = image,
-                            storeName = storeName
+                            storeName = storeName,
+                            inStock = offer.inStock
                         )
                     }
                 }
@@ -103,7 +104,9 @@ object PriceScraper {
         return result
     }
 
-    private fun extractOffer(offersAny: Any?): Pair<Double, String>? {
+    private data class OfferInfo(val price: Double, val currencySymbol: String, val inStock: Boolean)
+
+    private fun extractOffer(offersAny: Any?): OfferInfo? {
         val offerObj: JSONObject = when (offersAny) {
             is JSONObject -> offersAny
             is JSONArray -> if (offersAny.length() > 0) offersAny.optJSONObject(0) else null
@@ -113,7 +116,23 @@ object PriceScraper {
         val priceRaw = offerObj.opt("price") ?: offerObj.opt("lowPrice") ?: return null
         val price = priceRaw.toString().replace(",", ".").toDoubleOrNull() ?: return null
         val currency = offerObj.optString("priceCurrency").ifBlank { "$" }
-        return price to symbolFor(currency)
+        val availability = offerObj.optString("availability").ifBlank { null }
+        return OfferInfo(price, symbolFor(currency), parseAvailability(availability))
+    }
+
+    /**
+     * Interpreta el campo "availability" de schema.org (ej: "https://schema.org/OutOfStock").
+     * Si no hay dato, asumimos que está disponible para no mostrar "Agotado" de más.
+     */
+    private fun parseAvailability(raw: String?): Boolean {
+        if (raw.isNullOrBlank()) return true
+        val normalized = raw.substringAfterLast("/").lowercase()
+        return when {
+            normalized.contains("outofstock") -> false
+            normalized.contains("soldout") -> false
+            normalized.contains("discontinued") -> false
+            else -> true
+        }
     }
 
     private fun extractImage(imageAny: Any?): String? = when (imageAny) {
@@ -138,7 +157,10 @@ object PriceScraper {
 
         val image = doc.select("meta[property=og:image]").attr("content").ifBlank { null }
 
-        return ScrapedProduct(name, price, symbolFor(currency), image, storeName)
+        val availability = doc.select("meta[property=product:availability]").attr("content")
+            .ifBlank { null }
+
+        return ScrapedProduct(name, price, symbolFor(currency), image, storeName, parseAvailability(availability))
     }
 
     private fun fromMicrodata(doc: Document, storeName: String): ScrapedProduct? {
@@ -156,7 +178,11 @@ object PriceScraper {
             it.attr("src").ifBlank { it.attr("content") }
         }
 
-        return ScrapedProduct(name, price, "$", image, storeName)
+        val availability = doc.select("[itemprop=availability]").firstOrNull()?.let {
+            it.attr("href").ifBlank { it.attr("content").ifBlank { it.text() } }
+        }
+
+        return ScrapedProduct(name, price, "$", image, storeName, parseAvailability(availability))
     }
 
     private fun fromRegexFallback(doc: Document, storeName: String): ScrapedProduct? {
