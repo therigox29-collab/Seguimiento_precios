@@ -2,6 +2,7 @@ package com.rodrigo.misprecios.notifications
 
 import java.awt.Desktop
 import java.awt.SystemTray
+import java.awt.Toolkit
 import java.awt.TrayIcon
 import java.awt.image.BufferedImage
 import java.net.URI
@@ -10,8 +11,10 @@ import kotlin.math.abs
 
 /**
  * Notificaciones nativas de Windows a través del ícono de la bandeja del sistema
- * (system tray). Si el sistema no soporta bandeja (raro en Windows), no rompe nada,
- * simplemente no se muestra el globo de aviso.
+ * (system tray), más un sonido de sistema que suena siempre. El globo visual
+ * depende de que Windows decida mostrarlo (el "Enfoque asistido" o los permisos
+ * de notificación pueden bloquearlo sin avisar), así que el sonido no depende
+ * de eso: usa el beep del sistema directamente.
  */
 object NotificationHelper {
 
@@ -49,9 +52,10 @@ object NotificationHelper {
         currencySymbol: String,
         productUrl: String
     ) {
-        val icon = trayIcon ?: return
         lastUrl = productUrl
+        runCatching { Toolkit.getDefaultToolkit().beep() }
 
+        val icon = trayIcon ?: return
         val isDrop = newPrice < oldPrice
         val format = NumberFormat.getNumberInstance()
         val diff = abs(newPrice - oldPrice)
@@ -60,7 +64,7 @@ object NotificationHelper {
             "$currencySymbol${format.format(newPrice)} (${if (isDrop) "-" else "+"}$currencySymbol${format.format(diff)})\n" +
             "(Doble clic en el ícono de la bandeja para abrir la tienda)"
 
-        icon.displayMessage(title, body, TrayIcon.MessageType.INFO)
+        runCatching { icon.displayMessage(title, body, TrayIcon.MessageType.INFO) }
     }
 
     fun showBackInStockNotification(
@@ -69,15 +73,16 @@ object NotificationHelper {
         currencySymbol: String,
         productUrl: String
     ) {
-        val icon = trayIcon ?: return
         lastUrl = productUrl
+        runCatching { Toolkit.getDefaultToolkit().beep() }
 
+        val icon = trayIcon ?: return
         val format = NumberFormat.getNumberInstance()
         val title = "✅ ¡Volvió a tener stock!"
         val body = "$productName ya está disponible: $currencySymbol${format.format(price)}\n" +
             "(Doble clic en el ícono de la bandeja para abrir la tienda)"
 
-        icon.displayMessage(title, body, TrayIcon.MessageType.INFO)
+        runCatching { icon.displayMessage(title, body, TrayIcon.MessageType.INFO) }
     }
 
     fun openUrl(url: String) {
