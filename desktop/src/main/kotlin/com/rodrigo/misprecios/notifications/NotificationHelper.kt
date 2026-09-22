@@ -1,47 +1,109 @@
 package com.rodrigo.misprecios.notifications
 
+import java.awt.Color
 import java.awt.Desktop
 import java.awt.SystemTray
 import java.awt.Toolkit
 import java.awt.TrayIcon
 import java.awt.image.BufferedImage
+import java.io.BufferedInputStream
 import java.net.URI
 import java.text.NumberFormat
+import java.util.Timer
+import java.util.TimerTask
+import javax.sound.sampled.AudioSystem
+import javax.sound.sampled.LineEvent
 import kotlin.math.abs
 
 /**
- * Notificaciones nativas de Windows a través del ícono de la bandeja del sistema
- * (system tray), más un sonido de sistema que suena siempre. El globo visual
- * depende de que Windows decida mostrarlo (el "Enfoque asistido" o los permisos
- * de notificación pueden bloquearlo sin avisar), así que el sonido no depende
- * de eso: usa el beep del sistema directamente.
+ * Notificaciones nativas de Windows: sonido propio (con el beep del sistema como
+ * respaldo si el archivo de audio no está disponible) y un ícono de bandeja que
+ * parpadea en amarillo y se queda así hasta que se abre la ventana de la app,
+ * como aviso de "hay algo para revisar".
  */
 object NotificationHelper {
 
     private var trayIcon: TrayIcon? = null
-
-    /** Guarda el link del último cambio de precio para poder abrirlo al hacer clic en el ícono. */
     private var lastUrl: String? = null
+    private var blinkTimer: Timer? = null
+    private var showingAlert = false
+
+    private val normalImage: BufferedImage by lazy { buildDot(Color(0x67, 0x50, 0xA4)) }
+    private val alertImage: BufferedImage by lazy { buildDot(Color(0xFF, 0xC1, 0x07)) }
+
+    private fun buildDot(color: Color): BufferedImage =
+        BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB).apply {
+            val g = createGraphics()
+            g.color = color
+            g.fillOval(0, 0, 16, 16)
+            g.dispose()
+        }
 
     fun init() {
         if (!SystemTray.isSupported()) return
         if (trayIcon != null) return
 
-        val image: BufferedImage = BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB).apply {
-            val g = createGraphics()
-            g.color = java.awt.Color(0x67, 0x50, 0xA4)
-            g.fillOval(0, 0, 16, 16)
-            g.dispose()
-        }
-
-        val icon = TrayIcon(image, "Mis Precios")
+        val icon = TrayIcon(normalImage, "Mis Precios")
         icon.isImageAutoSize = true
         icon.addActionListener {
+            clearAlert()
             lastUrl?.let { openUrl(it) }
         }
         runCatching {
             SystemTray.getSystemTray().add(icon)
             trayIcon = icon
+        }
+    }
+
+    /** Hace parpadear el ícono unos segundos y lo deja fijo en amarillo hasta revisar. */
+    private fun markNeedsReview() {
+        val icon = trayIcon ?: return
+        blinkTimer?.cancel()
+
+        var toggles = 0
+        val timer = Timer(true)
+        timer.scheduleAtFixedRate(object : TimerTask() {
+            override fun run() {
+                showingAlert = !showingAlert
+                icon.image = if (showingAlert) alertImage else normalImage
+                toggles++
+                if (toggles >= 8) {
+                    icon.image = alertImage
+                    showingAlert = true
+                    cancel()
+                }
+            }
+        }, 0, 500)
+        blinkTimer = timer
+    }
+
+    /** Vuelve el ícono a su color normal. Se llama al abrir/enfocar la ventana de la app. */
+    fun clearAlert() {
+        blinkTimer?.cancel()
+        blinkTimer = null
+        showingAlert = false
+        trayIcon?.image = normalImage
+    }
+
+    private fun playChime() {
+        val played = runCatching {
+            val stream = NotificationHelper::class.java.getResourceAsStream("/price-alert.wav")
+                ?: return@runCatching false
+            val audioIn = AudioSystem.getAudioInputStream(BufferedInputStream(stream))
+            val clip = AudioSystem.getClip()
+            clip.addLineListener { event ->
+                if (event.type == LineEvent.Type.STOP) {
+                    clip.close()
+                    runCatching { audioIn.close() }
+                }
+            }
+            clip.open(audioIn)
+            clip.start()
+            true
+        }.getOrDefault(false)
+
+        if (!played) {
+            runCatching { Toolkit.getDefaultToolkit().beep() }
         }
     }
 
@@ -53,7 +115,8 @@ object NotificationHelper {
         productUrl: String
     ) {
         lastUrl = productUrl
-        runCatching { Toolkit.getDefaultToolkit().beep() }
+        playChime()
+        markNeedsReview()
 
         val icon = trayIcon ?: return
         val isDrop = newPrice < oldPrice
@@ -74,7 +137,8 @@ object NotificationHelper {
         productUrl: String
     ) {
         lastUrl = productUrl
-        runCatching { Toolkit.getDefaultToolkit().beep() }
+        playChime()
+        markNeedsReview()
 
         val icon = trayIcon ?: return
         val format = NumberFormat.getNumberInstance()
