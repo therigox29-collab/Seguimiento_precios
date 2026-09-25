@@ -53,9 +53,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         _previewState.value = PreviewState.Idle
     }
 
-    fun saveProduct(url: String, alias: String, scraped: ScrapedProduct) {
+    fun saveProduct(url: String, alias: String, scraped: ScrapedProduct, outOfStockKeyword: String = "") {
         viewModelScope.launch {
-            repository.addProduct(url, alias, scraped)
+            repository.addProduct(url, alias, scraped, outOfStockKeyword)
             _previewState.value = PreviewState.Idle
         }
     }
