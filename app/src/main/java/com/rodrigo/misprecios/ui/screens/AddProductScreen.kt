@@ -43,6 +43,7 @@ import java.text.NumberFormat
 fun AddProductScreen(viewModel: AppViewModel, onDone: () -> Unit) {
     var url by remember { mutableStateOf("") }
     var alias by remember { mutableStateOf("") }
+    var outOfStockKeyword by remember { mutableStateOf("") }
     val previewState by viewModel.previewState.collectAsState()
 
     Scaffold(
@@ -139,9 +140,25 @@ fun AddProductScreen(viewModel: AppViewModel, onDone: () -> Unit) {
                         singleLine = true
                     )
 
+                    OutlinedTextField(
+                        value = outOfStockKeyword,
+                        onValueChange = { outOfStockKeyword = it },
+                        label = { Text("Frase de \"agotado\" (opcional)") },
+                        placeholder = { Text("Ej: Fuera de stock") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                    Text(
+                        "Si la detección automática no funciona para esta tienda, escribí acá " +
+                            "la frase exacta que la página muestra cuando no hay stock. Mientras " +
+                            "esa frase esté en la página, la app va a marcar el producto como agotado.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
                     Button(
                         onClick = {
-                            viewModel.saveProduct(url, alias, scraped)
+                            viewModel.saveProduct(url, alias, scraped, outOfStockKeyword)
                             onDone()
                         },
                         modifier = Modifier.fillMaxWidth()
