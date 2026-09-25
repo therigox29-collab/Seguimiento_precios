@@ -17,5 +17,6 @@ data class Product(
     val currencySymbol: String,
     val lastCheckedAt: Long,
     val notifyOnlyOnDrop: Boolean = false,
-    val inStock: Boolean = true
+    val inStock: Boolean = true,
+    val outOfStockKeyword: String? = null
 )
