@@ -16,7 +16,12 @@ object Repository {
 
     suspend fun getHistory(id: Long): List<PriceHistoryEntry> = withContext(Dispatchers.IO) { Database.getHistory(id) }
 
-    suspend fun addProduct(url: String, alias: String, scraped: ScrapedProduct): Long = withContext(Dispatchers.IO) {
+    suspend fun addProduct(
+        url: String,
+        alias: String,
+        scraped: ScrapedProduct,
+        outOfStockKeyword: String? = null
+    ): Long = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
         val product = Product(
             url = url,
@@ -28,7 +33,8 @@ object Repository {
             previousPrice = null,
             currencySymbol = scraped.currencySymbol,
             lastCheckedAt = now,
-            inStock = scraped.inStock
+            inStock = scraped.inStock,
+            outOfStockKeyword = outOfStockKeyword?.trim()?.ifBlank { null }
         )
         val id = Database.insertProduct(product)
         Database.insertHistory(PriceHistoryEntry(productId = id, price = scraped.price, checkedAt = now))
@@ -48,7 +54,9 @@ object Repository {
         var changedCount = 0
 
         for (product in products) {
-            val scraped = runCatching { PriceScraper.fetch(product.url) }.getOrNull() ?: continue
+            val scraped = runCatching {
+                PriceScraper.fetch(product.url, product.outOfStockKeyword)
+            }.getOrNull() ?: continue
             val now = System.currentTimeMillis()
 
             val priceChanged = scraped.price != product.currentPrice
