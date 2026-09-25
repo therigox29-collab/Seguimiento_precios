@@ -22,7 +22,12 @@ class ProductRepository(context: Context) {
     /** Detecta los datos de un producto a partir de su URL, sin guardarlo todavía. */
     suspend fun preview(url: String): ScrapedProduct = PriceScraper.fetch(url)
 
-    suspend fun addProduct(url: String, alias: String, scraped: ScrapedProduct): Long {
+    suspend fun addProduct(
+        url: String,
+        alias: String,
+        scraped: ScrapedProduct,
+        outOfStockKeyword: String? = null
+    ): Long {
         val now = System.currentTimeMillis()
         val product = Product(
             url = url,
@@ -34,7 +39,8 @@ class ProductRepository(context: Context) {
             previousPrice = null,
             currencySymbol = scraped.currencySymbol,
             lastCheckedAt = now,
-            inStock = scraped.inStock
+            inStock = scraped.inStock,
+            outOfStockKeyword = outOfStockKeyword?.trim()?.ifBlank { null }
         )
         val id = dao.insert(product)
         dao.insertHistory(PriceHistoryEntry(productId = id, price = scraped.price, checkedAt = now))
@@ -54,7 +60,9 @@ class ProductRepository(context: Context) {
         var changedCount = 0
 
         for (product in products) {
-            val scraped = runCatching { PriceScraper.fetch(product.url) }.getOrNull() ?: continue
+            val scraped = runCatching {
+                PriceScraper.fetch(product.url, product.outOfStockKeyword)
+            }.getOrNull() ?: continue
             val now = System.currentTimeMillis()
 
             val priceChanged = scraped.price != product.currentPrice
