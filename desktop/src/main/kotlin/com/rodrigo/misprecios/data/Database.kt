@@ -54,10 +54,13 @@ object Database {
                     )
                     """.trimIndent()
                 )
-                // Migración liviana: si la base ya existía de una versión anterior sin esta
-                // columna, la agregamos ahora. Si ya está, SQLite tira error y lo ignoramos.
+                // Migraciones livianas: si la base ya existía de una versión anterior sin estas
+                // columnas, se agregan ahora. Si ya están, SQLite tira error y se ignora.
                 runCatching {
                     stmt.execute("ALTER TABLE products ADD COLUMN inStock INTEGER NOT NULL DEFAULT 1")
+                }
+                runCatching {
+                    stmt.execute("ALTER TABLE products ADD COLUMN outOfStockKeyword TEXT")
                 }
             }
         }
@@ -82,8 +85,8 @@ object Database {
 
     fun insertProduct(product: Product): Long = connect().use { conn ->
         conn.prepareStatement(
-            "INSERT INTO products (url, alias, name, imageUrl, storeName, currentPrice, previousPrice, currencySymbol, lastCheckedAt, inStock) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO products (url, alias, name, imageUrl, storeName, currentPrice, previousPrice, currencySymbol, lastCheckedAt, inStock, outOfStockKeyword) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             Statement.RETURN_GENERATED_KEYS
         ).use { stmt ->
             stmt.setString(1, product.url)
@@ -96,6 +99,7 @@ object Database {
             stmt.setString(8, product.currencySymbol)
             stmt.setLong(9, product.lastCheckedAt)
             stmt.setInt(10, if (product.inStock) 1 else 0)
+            stmt.setString(11, product.outOfStockKeyword)
             stmt.executeUpdate()
             val keys = stmt.generatedKeys
             if (keys.next()) keys.getLong(1) else 0L
@@ -105,7 +109,7 @@ object Database {
     fun updateProduct(product: Product) {
         connect().use { conn ->
             conn.prepareStatement(
-                "UPDATE products SET alias=?, name=?, imageUrl=?, storeName=?, currentPrice=?, previousPrice=?, currencySymbol=?, lastCheckedAt=?, inStock=? WHERE id=?"
+                "UPDATE products SET alias=?, name=?, imageUrl=?, storeName=?, currentPrice=?, previousPrice=?, currencySymbol=?, lastCheckedAt=?, inStock=?, outOfStockKeyword=? WHERE id=?"
             ).use { stmt ->
                 stmt.setString(1, product.alias)
                 stmt.setString(2, product.name)
@@ -116,7 +120,8 @@ object Database {
                 stmt.setString(7, product.currencySymbol)
                 stmt.setLong(8, product.lastCheckedAt)
                 stmt.setInt(9, if (product.inStock) 1 else 0)
-                stmt.setLong(10, product.id)
+                stmt.setString(10, product.outOfStockKeyword)
+                stmt.setLong(11, product.id)
                 stmt.executeUpdate()
             }
         }
@@ -178,6 +183,7 @@ object Database {
         previousPrice = getObject("previousPrice") as? Double,
         currencySymbol = getString("currencySymbol"),
         lastCheckedAt = getLong("lastCheckedAt"),
-        inStock = runCatching { getInt("inStock") != 0 }.getOrDefault(true)
+        inStock = runCatching { getInt("inStock") != 0 }.getOrDefault(true),
+        outOfStockKeyword = runCatching { getString("outOfStockKeyword") }.getOrNull()
     )
 }
