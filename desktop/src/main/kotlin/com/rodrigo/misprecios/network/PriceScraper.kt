@@ -13,9 +13,10 @@ import java.util.concurrent.TimeUnit
 import java.util.regex.Pattern
 
 /**
- * Misma lógica que la versión Android: intenta JSON-LD, después Open Graph,
- * después microdata, y como último recurso un patrón de moneda en el texto.
- * También intenta detectar si el producto está agotado (availability de schema.org).
+ * Misma lógica que la versión Android: intenta JSON-LD, después Open Graph, después
+ * microdata, y como último recurso un patrón de moneda en el texto. Para la disponibilidad,
+ * además del dato estructurado, se revisa el texto visible de la página (y, si el producto
+ * tiene una frase personalizada configurada, esa frase manda por encima de todo).
  */
 object PriceScraper {
 
@@ -28,7 +29,7 @@ object PriceScraper {
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) " +
             "Chrome/126.0.0.0 Safari/537.36"
 
-    suspend fun fetch(url: String): ScrapedProduct = withContext(Dispatchers.IO) {
+    suspend fun fetch(url: String, outOfStockKeyword: String? = null): ScrapedProduct = withContext(Dispatchers.IO) {
         val request = Request.Builder()
             .url(url)
             .header("User-Agent", USER_AGENT)
@@ -45,7 +46,7 @@ object PriceScraper {
         val doc = Jsoup.parse(html, url)
         val storeName = URI(url).host?.removePrefix("www.") ?: "Tienda"
 
-        fromJsonLd(doc, storeName)
+        val base = fromJsonLd(doc, storeName)
             ?: fromOpenGraph(doc, storeName)
             ?: fromMicrodata(doc, storeName)
             ?: fromRegexFallback(doc, storeName)
@@ -53,7 +54,54 @@ object PriceScraper {
                 "No pudimos detectar el precio en esta página. Probá con otra URL o " +
                     "revisá que el producto esté visible sin iniciar sesión."
             )
+
+        val finalInStock = resolveStockStatus(doc, outOfStockKeyword, base.inStock)
+        if (finalInStock == base.inStock) base else base.copy(inStock = finalInStock)
     }
+
+    /**
+     * Combina el dato estructurado (JSON-LD/Open Graph/microdata) con una revisión del texto
+     * visible de la página. Si se definió una frase personalizada para este producto, esa
+     * frase decide todo: si aparece en la página, está agotado; si no aparece, está disponible.
+     * Si no hay frase personalizada, se busca una lista de frases comunes de "agotado",
+     * cortando la búsqueda antes de cualquier sección de "productos relacionados" para no
+     * confundirse con la disponibilidad de OTRO producto que aparezca más abajo en la página.
+     */
+    private fun resolveStockStatus(doc: Document, customKeyword: String?, structuredInStock: Boolean): Boolean {
+        if (!customKeyword.isNullOrBlank()) {
+            val text = doc.body()?.text()?.lowercase() ?: return structuredInStock
+            return !text.contains(customKeyword.trim().lowercase())
+        }
+
+        val text = mainProductTextBeforeRelatedSections(doc)
+        if (GENERIC_OUT_OF_STOCK_PHRASES.any { text.contains(it) }) return false
+
+        return structuredInStock
+    }
+
+    private fun mainProductTextBeforeRelatedSections(doc: Document): String {
+        val fullText = (doc.body()?.text() ?: "").lowercase()
+        var cutoff = fullText.length
+        for (marker in RELATED_SECTION_MARKERS) {
+            val idx = fullText.indexOf(marker)
+            if (idx in 0 until cutoff) cutoff = idx
+        }
+        return fullText.substring(0, cutoff)
+    }
+
+    private val GENERIC_OUT_OF_STOCK_PHRASES = listOf(
+        "fuera de stock", "sin stock", "sin existencias", "agotado", "agotados",
+        "producto no disponible", "no disponible", "no hay stock", "en stock: 0",
+        "out of stock", "sold out", "unavailable", "not available",
+        "discontinuado", "discontinued"
+    )
+
+    private val RELATED_SECTION_MARKERS = listOf(
+        "productos relacionados", "también te puede interesar", "tambien te puede interesar",
+        "quienes compraron", "productos similares", "recomendados para ti",
+        "recomendaciones para ti", "otros productos que te pueden interesar",
+        "related products", "you may also like", "customers also bought", "similar products"
+    )
 
     private fun fromJsonLd(doc: Document, storeName: String): ScrapedProduct? {
         for (script in doc.select("script[type=application/ld+json]")) {
@@ -119,7 +167,9 @@ object PriceScraper {
 
     /**
      * Interpreta el campo "availability" de schema.org (ej: "https://schema.org/OutOfStock").
-     * Si no hay dato, asumimos que está disponible para no mostrar "Agotado" de más.
+     * Si no hay dato, asumimos que está disponible para no mostrar "Agotado" de más (después
+     * resolveStockStatus() revisa también el texto de la página para pescar lo que esto se
+     * pierda).
      */
     private fun parseAvailability(raw: String?): Boolean {
         if (raw.isNullOrBlank()) return true
