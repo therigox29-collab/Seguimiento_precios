@@ -17,12 +17,29 @@ android {
         versionName = "1.0"
     }
 
+    // Firma fija para las compilaciones de depuración (debug). Sin esto, cada máquina que
+    // compila (incluyendo cada ejecución de GitHub Actions, que arranca de cero) genera una
+    // llave de firma distinta y aleatoria. Android no deja instalar una app "actualizada" si
+    // tiene una firma distinta a la que ya está instalada: obliga a desinstalar primero, y
+    // desinstalar borra los datos guardados (los productos y el historial). Usando siempre
+    // el mismo archivo de llave (subido al repo), todas las compilaciones quedan firmadas
+    // igual y las actualizaciones futuras se instalan directo, sin perder nada.
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
         }
         debug {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 
