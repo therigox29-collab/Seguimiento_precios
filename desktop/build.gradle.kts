@@ -21,10 +21,22 @@ dependencies {
     implementation("org.json:json:20240303")
 
     implementation("org.xerial:sqlite-jdbc:3.46.1.3")
+
+    testImplementation(kotlin("test"))
 }
 
 kotlin {
     jvmToolchain(17)
+
+    // El scraper de precios (y sus tests) es compartido con la app Android: shared/scraper.
+    sourceSets {
+        named("main") { kotlin.srcDir("../shared/scraper/src/main/kotlin") }
+        named("test") { kotlin.srcDir("../shared/scraper/src/test/kotlin") }
+    }
+}
+
+tasks.test {
+    useJUnitPlatform()
 }
 
 compose.desktop {

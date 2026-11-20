@@ -1,6 +1,8 @@
 package com.rodrigo.misprecios.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -44,6 +46,7 @@ fun AddProductScreen(viewModel: AppViewModel, onDone: () -> Unit) {
     var url by remember { mutableStateOf("") }
     var alias by remember { mutableStateOf("") }
     var outOfStockKeyword by remember { mutableStateOf("") }
+    var priceSelector by remember { mutableStateOf("") }
     val previewState by viewModel.previewState.collectAsState()
 
     Scaffold(
@@ -62,6 +65,7 @@ fun AddProductScreen(viewModel: AppViewModel, onDone: () -> Unit) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .verticalScroll(rememberScrollState())
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
@@ -74,8 +78,24 @@ fun AddProductScreen(viewModel: AppViewModel, onDone: () -> Unit) {
                 singleLine = true
             )
 
+            OutlinedTextField(
+                value = priceSelector,
+                onValueChange = { priceSelector = it },
+                label = { Text("Selector CSS del precio (opcional, avanzado)") },
+                placeholder = { Text("Ej: .product-info .price-final") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+            Text(
+                "Solo si el precio detectado sale mal: indicá qué elemento de la página tiene el " +
+                    "precio (en la PC: clic derecho sobre el precio > Inspeccionar). Volvé a tocar " +
+                    "\"Detectar precio\" para probarlo.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
             Button(
-                onClick = { viewModel.previewUrl(url) },
+                onClick = { viewModel.previewUrl(url, priceSelector) },
                 enabled = url.isNotBlank() && previewState !is AppViewModel.PreviewState.Loading,
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -128,6 +148,11 @@ fun AddProductScreen(viewModel: AppViewModel, onDone: () -> Unit) {
                                     fontWeight = FontWeight.ExtraBold,
                                     style = MaterialTheme.typography.headlineSmall
                                 )
+                                Text(
+                                    "Detectado con: ${scraped.source.label}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
                         }
                     }
@@ -158,7 +183,7 @@ fun AddProductScreen(viewModel: AppViewModel, onDone: () -> Unit) {
 
                     Button(
                         onClick = {
-                            viewModel.saveProduct(url, alias, scraped, outOfStockKeyword)
+                            viewModel.saveProduct(url, alias, scraped, outOfStockKeyword, priceSelector)
                             onDone()
                         },
                         modifier = Modifier.fillMaxWidth()

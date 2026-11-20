@@ -69,12 +69,29 @@ Gradle (ahí sí con tu propia conexión a internet) y `Build > Build Bundle(s)/
 ```
 app/src/main/java/com/rodrigo/misprecios/
   data/           Room (base de datos local) + DataStore (ajustes)
-  network/        Scraper de precios (OkHttp + Jsoup)
   notifications/  Canales y notificaciones
   work/           WorkManager (modo ahorro)
   service/        Foreground Service (modo rápido)
   ui/             Pantallas en Jetpack Compose + navegación
+
+shared/scraper/   Scraper de precios (OkHttp + Jsoup), compartido por Android y escritorio
+  src/main/...    PriceScraper (estrategias), PriceParser (formatos de precio y monedas)
+  src/test/...    Tests con HTML de ejemplo (se corren con `gradle test` dentro de desktop/)
 ```
+
+### Cómo detecta el precio
+
+1. **Selector CSS personalizado** (opcional, por producto) — manda sobre todo lo demás.
+2. **JSON-LD** (`schema.org/Product`, `ProductGroup`, `AggregateOffer`, `priceSpecification`).
+3. **APIs de Shopify y VTEX**, para tiendas que cargan el precio con JavaScript.
+4. **Open Graph / meta tags** y **microdata** (`itemprop="price"`).
+5. **Elementos con clase de precio** (`price`, `precio`), ignorando precios tachados, cuotas,
+   envío, carrito y productos relacionados.
+6. **Patrón de moneda en el texto**, empezando desde el título del producto.
+
+Los precios se interpretan según el formato (`9.990` = nueve mil novecientos noventa,
+`19,99` = diecinueve con noventa y nueve). Si un precio cambia de golpe más de un 70 % hacia
+abajo o se triplica, la app espera a que la revisión siguiente lo confirme antes de avisar.
 
 ## Antes de publicar en Play Store
 

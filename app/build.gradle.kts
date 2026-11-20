@@ -56,6 +56,14 @@ android {
         compose = true
     }
 
+    // El scraper de precios es el mismo para Android y escritorio: vive en shared/scraper
+    // y cada app lo compila como parte de su propio código.
+    sourceSets {
+        getByName("main") {
+            java.srcDir("../shared/scraper/src/main/kotlin")
+        }
+    }
+
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"

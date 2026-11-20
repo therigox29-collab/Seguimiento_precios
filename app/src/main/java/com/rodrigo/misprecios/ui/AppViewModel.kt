@@ -38,11 +38,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun observeHistory(productId: Long) = repository.observeHistory(productId)
     fun observeProduct(productId: Long) = repository.observeById(productId)
 
-    fun previewUrl(url: String) {
+    fun previewUrl(url: String, priceSelector: String = "") {
         _previewState.value = PreviewState.Loading
         viewModelScope.launch {
             _previewState.value = try {
-                PreviewState.Success(repository.preview(url))
+                PreviewState.Success(repository.preview(url, priceSelector.ifBlank { null }))
             } catch (e: Exception) {
                 PreviewState.Error(e.message ?: "No pudimos leer esa página")
             }
@@ -53,9 +53,15 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         _previewState.value = PreviewState.Idle
     }
 
-    fun saveProduct(url: String, alias: String, scraped: ScrapedProduct, outOfStockKeyword: String = "") {
+    fun saveProduct(
+        url: String,
+        alias: String,
+        scraped: ScrapedProduct,
+        outOfStockKeyword: String = "",
+        priceSelector: String = ""
+    ) {
         viewModelScope.launch {
-            repository.addProduct(url, alias, scraped, outOfStockKeyword)
+            repository.addProduct(url, alias, scraped, outOfStockKeyword, priceSelector)
             _previewState.value = PreviewState.Idle
         }
     }

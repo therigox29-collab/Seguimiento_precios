@@ -12,7 +12,11 @@ data class Product(
     val currencySymbol: String,
     val lastCheckedAt: Long,
     val inStock: Boolean = true,
-    val outOfStockKeyword: String? = null
+    val outOfStockKeyword: String? = null,
+    /** Selector CSS opcional para tiendas donde la detección automática toma mal el precio. */
+    val priceSelector: String? = null,
+    /** Precio con un salto demasiado brusco, pendiente de confirmar en la próxima revisión. */
+    val suspectPrice: Double? = null
 )
 
 data class PriceHistoryEntry(

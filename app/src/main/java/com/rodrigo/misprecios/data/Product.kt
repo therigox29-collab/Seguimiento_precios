@@ -18,5 +18,12 @@ data class Product(
     val lastCheckedAt: Long,
     val notifyOnlyOnDrop: Boolean = false,
     val inStock: Boolean = true,
-    val outOfStockKeyword: String? = null
+    val outOfStockKeyword: String? = null,
+    /** Selector CSS opcional para tiendas donde la detección automática toma mal el precio. */
+    val priceSelector: String? = null,
+    /**
+     * Precio "sospechoso" visto en la última revisión (cambio demasiado brusco). Solo se acepta
+     * si la revisión siguiente lo confirma; así se evitan alertas falsas por lecturas erróneas.
+     */
+    val suspectPrice: Double? = null
 )

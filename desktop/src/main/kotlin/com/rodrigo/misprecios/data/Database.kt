@@ -62,6 +62,12 @@ object Database {
                 runCatching {
                     stmt.execute("ALTER TABLE products ADD COLUMN outOfStockKeyword TEXT")
                 }
+                runCatching {
+                    stmt.execute("ALTER TABLE products ADD COLUMN priceSelector TEXT")
+                }
+                runCatching {
+                    stmt.execute("ALTER TABLE products ADD COLUMN suspectPrice REAL")
+                }
             }
         }
     }
@@ -85,8 +91,8 @@ object Database {
 
     fun insertProduct(product: Product): Long = connect().use { conn ->
         conn.prepareStatement(
-            "INSERT INTO products (url, alias, name, imageUrl, storeName, currentPrice, previousPrice, currencySymbol, lastCheckedAt, inStock, outOfStockKeyword) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO products (url, alias, name, imageUrl, storeName, currentPrice, previousPrice, currencySymbol, lastCheckedAt, inStock, outOfStockKeyword, priceSelector, suspectPrice) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             Statement.RETURN_GENERATED_KEYS
         ).use { stmt ->
             stmt.setString(1, product.url)
@@ -100,6 +106,8 @@ object Database {
             stmt.setLong(9, product.lastCheckedAt)
             stmt.setInt(10, if (product.inStock) 1 else 0)
             stmt.setString(11, product.outOfStockKeyword)
+            stmt.setString(12, product.priceSelector)
+            if (product.suspectPrice != null) stmt.setDouble(13, product.suspectPrice) else stmt.setNull(13, java.sql.Types.REAL)
             stmt.executeUpdate()
             val keys = stmt.generatedKeys
             if (keys.next()) keys.getLong(1) else 0L
@@ -109,7 +117,7 @@ object Database {
     fun updateProduct(product: Product) {
         connect().use { conn ->
             conn.prepareStatement(
-                "UPDATE products SET alias=?, name=?, imageUrl=?, storeName=?, currentPrice=?, previousPrice=?, currencySymbol=?, lastCheckedAt=?, inStock=?, outOfStockKeyword=? WHERE id=?"
+                "UPDATE products SET alias=?, name=?, imageUrl=?, storeName=?, currentPrice=?, previousPrice=?, currencySymbol=?, lastCheckedAt=?, inStock=?, outOfStockKeyword=?, priceSelector=?, suspectPrice=? WHERE id=?"
             ).use { stmt ->
                 stmt.setString(1, product.alias)
                 stmt.setString(2, product.name)
@@ -121,7 +129,9 @@ object Database {
                 stmt.setLong(8, product.lastCheckedAt)
                 stmt.setInt(9, if (product.inStock) 1 else 0)
                 stmt.setString(10, product.outOfStockKeyword)
-                stmt.setLong(11, product.id)
+                stmt.setString(11, product.priceSelector)
+                if (product.suspectPrice != null) stmt.setDouble(12, product.suspectPrice) else stmt.setNull(12, java.sql.Types.REAL)
+                stmt.setLong(13, product.id)
                 stmt.executeUpdate()
             }
         }
@@ -184,6 +194,8 @@ object Database {
         currencySymbol = getString("currencySymbol"),
         lastCheckedAt = getLong("lastCheckedAt"),
         inStock = runCatching { getInt("inStock") != 0 }.getOrDefault(true),
-        outOfStockKeyword = runCatching { getString("outOfStockKeyword") }.getOrNull()
+        outOfStockKeyword = runCatching { getString("outOfStockKeyword") }.getOrNull(),
+        priceSelector = runCatching { getString("priceSelector") }.getOrNull(),
+        suspectPrice = runCatching { getObject("suspectPrice") as? Double }.getOrNull()
     )
 }

@@ -1,6 +1,7 @@
 package com.rodrigo.misprecios.data
 
 import android.content.Context
+import com.rodrigo.misprecios.network.PriceChangeGuard
 import com.rodrigo.misprecios.network.PriceScraper
 import com.rodrigo.misprecios.network.ScrapedProduct
 import com.rodrigo.misprecios.notifications.NotificationHelper
@@ -20,17 +21,19 @@ class ProductRepository(context: Context) {
     fun observeHistory(id: Long): Flow<List<PriceHistoryEntry>> = dao.observeHistory(id)
 
     /** Detecta los datos de un producto a partir de su URL, sin guardarlo todavía. */
-    suspend fun preview(url: String): ScrapedProduct = PriceScraper.fetch(url)
+    suspend fun preview(url: String, priceSelector: String? = null): ScrapedProduct =
+        PriceScraper.fetch(url, priceSelector = priceSelector)
 
     suspend fun addProduct(
         url: String,
         alias: String,
         scraped: ScrapedProduct,
-        outOfStockKeyword: String? = null
+        outOfStockKeyword: String? = null,
+        priceSelector: String? = null
     ): Long {
         val now = System.currentTimeMillis()
         val product = Product(
-            url = url,
+            url = url.trim(),
             alias = alias.ifBlank { scraped.name },
             name = scraped.name,
             imageUrl = scraped.imageUrl,
@@ -40,7 +43,8 @@ class ProductRepository(context: Context) {
             currencySymbol = scraped.currencySymbol,
             lastCheckedAt = now,
             inStock = scraped.inStock,
-            outOfStockKeyword = outOfStockKeyword?.trim()?.ifBlank { null }
+            outOfStockKeyword = outOfStockKeyword?.trim()?.ifBlank { null },
+            priceSelector = priceSelector?.trim()?.ifBlank { null }
         )
         val id = dao.insert(product)
         dao.insertHistory(PriceHistoryEntry(productId = id, price = scraped.price, checkedAt = now))
@@ -53,6 +57,10 @@ class ProductRepository(context: Context) {
      * Revisa todos los productos guardados: consulta el precio actual, lo compara con el
      * último guardado y, si cambió (precio o disponibilidad), actualiza la base y dispara
      * una notificación. Devuelve la cantidad de productos cuyo precio cambió.
+     *
+     * Si el precio cambia de forma muy brusca (ver [PriceChangeGuard]) no se acepta en el
+     * momento: se guarda como "sospechoso" y solo se confirma si la revisión siguiente
+     * devuelve el mismo valor. Así una lectura equivocada no genera alertas falsas.
      */
     suspend fun checkAllPrices(): Int {
         val products = dao.getAll()
@@ -61,11 +69,19 @@ class ProductRepository(context: Context) {
 
         for (product in products) {
             val scraped = runCatching {
-                PriceScraper.fetch(product.url, product.outOfStockKeyword)
+                PriceScraper.fetch(product.url, product.outOfStockKeyword, product.priceSelector)
             }.getOrNull() ?: continue
             val now = System.currentTimeMillis()
 
             val priceChanged = scraped.price != product.currentPrice
+            if (priceChanged &&
+                PriceChangeGuard.isSuspicious(product.currentPrice, scraped.price) &&
+                product.suspectPrice != scraped.price
+            ) {
+                // Primera vez que vemos este salto: esperar confirmación.
+                dao.update(product.copy(suspectPrice = scraped.price, lastCheckedAt = now))
+                continue
+            }
             val backInStock = !product.inStock && scraped.inStock
             val stockChanged = product.inStock != scraped.inStock
 
@@ -76,7 +92,8 @@ class ProductRepository(context: Context) {
                     name = scraped.name,
                     imageUrl = scraped.imageUrl ?: product.imageUrl,
                     inStock = scraped.inStock,
-                    lastCheckedAt = now
+                    lastCheckedAt = now,
+                    suspectPrice = null
                 )
                 dao.update(updated)
 
@@ -110,7 +127,7 @@ class ProductRepository(context: Context) {
                     }
                 }
             } else {
-                dao.update(product.copy(lastCheckedAt = now))
+                dao.update(product.copy(lastCheckedAt = now, suspectPrice = null))
             }
         }
         return changedCount

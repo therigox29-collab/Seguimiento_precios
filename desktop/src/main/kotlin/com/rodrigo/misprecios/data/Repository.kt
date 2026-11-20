@@ -1,5 +1,6 @@
 package com.rodrigo.misprecios.data
 
+import com.rodrigo.misprecios.network.PriceChangeGuard
 import com.rodrigo.misprecios.network.PriceScraper
 import com.rodrigo.misprecios.network.ScrapedProduct
 import com.rodrigo.misprecios.notifications.NotificationHelper
@@ -8,7 +9,8 @@ import kotlinx.coroutines.withContext
 
 object Repository {
 
-    suspend fun preview(url: String): ScrapedProduct = PriceScraper.fetch(url)
+    suspend fun preview(url: String, priceSelector: String? = null): ScrapedProduct =
+        PriceScraper.fetch(url, priceSelector = priceSelector)
 
     suspend fun getAll(): List<Product> = withContext(Dispatchers.IO) { Database.getAllProducts() }
 
@@ -20,11 +22,12 @@ object Repository {
         url: String,
         alias: String,
         scraped: ScrapedProduct,
-        outOfStockKeyword: String? = null
+        outOfStockKeyword: String? = null,
+        priceSelector: String? = null
     ): Long = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
         val product = Product(
-            url = url,
+            url = url.trim(),
             alias = alias.ifBlank { scraped.name },
             name = scraped.name,
             imageUrl = scraped.imageUrl,
@@ -34,7 +37,8 @@ object Repository {
             currencySymbol = scraped.currencySymbol,
             lastCheckedAt = now,
             inStock = scraped.inStock,
-            outOfStockKeyword = outOfStockKeyword?.trim()?.ifBlank { null }
+            outOfStockKeyword = outOfStockKeyword?.trim()?.ifBlank { null },
+            priceSelector = priceSelector?.trim()?.ifBlank { null }
         )
         val id = Database.insertProduct(product)
         Database.insertHistory(PriceHistoryEntry(productId = id, price = scraped.price, checkedAt = now))
@@ -55,11 +59,20 @@ object Repository {
 
         for (product in products) {
             val scraped = runCatching {
-                PriceScraper.fetch(product.url, product.outOfStockKeyword)
+                PriceScraper.fetch(product.url, product.outOfStockKeyword, product.priceSelector)
             }.getOrNull() ?: continue
             val now = System.currentTimeMillis()
 
             val priceChanged = scraped.price != product.currentPrice
+            if (priceChanged &&
+                PriceChangeGuard.isSuspicious(product.currentPrice, scraped.price) &&
+                product.suspectPrice != scraped.price
+            ) {
+                // Salto muy brusco visto por primera vez: esperar a que la próxima revisión
+                // lo confirme antes de aceptarlo y notificar (evita alertas por lecturas erróneas).
+                Database.updateProduct(product.copy(suspectPrice = scraped.price, lastCheckedAt = now))
+                continue
+            }
             val backInStock = !product.inStock && scraped.inStock
 
             if (priceChanged || product.inStock != scraped.inStock) {
@@ -69,7 +82,8 @@ object Repository {
                     name = scraped.name,
                     imageUrl = scraped.imageUrl ?: product.imageUrl,
                     inStock = scraped.inStock,
-                    lastCheckedAt = now
+                    lastCheckedAt = now,
+                    suspectPrice = null
                 )
                 Database.updateProduct(updated)
 
@@ -100,7 +114,7 @@ object Repository {
                     }
                 }
             } else {
-                Database.updateProduct(product.copy(lastCheckedAt = now))
+                Database.updateProduct(product.copy(lastCheckedAt = now, suspectPrice = null))
             }
         }
         changedCount

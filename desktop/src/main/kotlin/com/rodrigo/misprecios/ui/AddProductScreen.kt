@@ -1,6 +1,8 @@
 package com.rodrigo.misprecios.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -50,6 +52,7 @@ fun AddProductScreen(onDone: () -> Unit) {
     var url by remember { mutableStateOf("") }
     var alias by remember { mutableStateOf("") }
     var outOfStockKeyword by remember { mutableStateOf("") }
+    var priceSelector by remember { mutableStateOf("") }
     var previewState by remember { mutableStateOf<PreviewState>(PreviewState.Idle) }
     val scope = rememberCoroutineScope()
 
@@ -66,7 +69,7 @@ fun AddProductScreen(onDone: () -> Unit) {
         }
     ) { padding ->
         Column(
-            modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp),
+            modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             OutlinedTextField(
@@ -78,12 +81,28 @@ fun AddProductScreen(onDone: () -> Unit) {
                 singleLine = true
             )
 
+            OutlinedTextField(
+                value = priceSelector,
+                onValueChange = { priceSelector = it },
+                label = { Text("Selector CSS del precio (opcional, avanzado)") },
+                placeholder = { Text("Ej: .product-info .price-final") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+            Text(
+                "Solo si el precio detectado sale mal: indicá qué elemento de la página tiene el " +
+                    "precio (clic derecho sobre el precio en el navegador > Inspeccionar). Volvé a tocar " +
+                    "\"Detectar precio\" para probarlo.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
             Button(
                 onClick = {
                     previewState = PreviewState.Loading
                     scope.launch {
                         previewState = try {
-                            PreviewState.Success(Repository.preview(url))
+                            PreviewState.Success(Repository.preview(url, priceSelector.ifBlank { null }))
                         } catch (e: Exception) {
                             PreviewState.Error(e.message ?: "No pudimos leer esa página")
                         }
@@ -126,6 +145,11 @@ fun AddProductScreen(onDone: () -> Unit) {
                                     fontWeight = FontWeight.ExtraBold,
                                     style = MaterialTheme.typography.headlineSmall
                                 )
+                                Text(
+                                    "Detectado con: ${scraped.source.label}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
                         }
                     }
@@ -157,7 +181,7 @@ fun AddProductScreen(onDone: () -> Unit) {
                     Button(
                         onClick = {
                             scope.launch {
-                                Repository.addProduct(url, alias, scraped, outOfStockKeyword)
+                                Repository.addProduct(url, alias, scraped, outOfStockKeyword, priceSelector)
                                 requestRefresh()
                                 onDone()
                             }
