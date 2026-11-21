@@ -81,6 +81,7 @@ object Repository {
                     currentPrice = scraped.price,
                     name = scraped.name,
                     imageUrl = scraped.imageUrl ?: product.imageUrl,
+                    currencySymbol = scraped.currencySymbol,
                     inStock = scraped.inStock,
                     lastCheckedAt = now,
                     suspectPrice = null

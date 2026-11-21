@@ -268,7 +268,7 @@ object PriceScraper {
     // 1) JSON-LD
     // ---------------------------------------------------------------------------------
 
-    private data class OfferInfo(val price: Double, val currency: String?, val inStock: Boolean)
+    private data class OfferInfo(val price: Double, val currency: String?, val inStock: Boolean, val sku: String? = null)
 
     private fun fromJsonLd(doc: Document, pageUrl: String, storeName: String): ScrapedProduct? {
         val products = mutableListOf<JSONObject>()
@@ -390,7 +390,22 @@ object PriceScraper {
         val offers = mutableListOf<OfferInfo>()
         collectOffers(node.opt("offers"), offers, 0)
         if (offers.isEmpty()) variants.forEach { collectOffers(it.opt("offers"), offers, 0) }
+
+        // Un mismo producto con varias ofertas, una por variante (ej. VTEX: ?skuId=402 y
+        // ofertas con "sku":"00000402"): quedarse con la de la variante de la URL.
+        if (wantedVariant != null) {
+            val matching = offers.filter { skuMatches(it.sku, wantedVariant) }
+            if (matching.isNotEmpty()) return pickBest(matching)
+        }
         return pickBest(offers)
+    }
+
+    /** Compara SKUs ignorando ceros a la izquierda ("00000402" == "402"). */
+    private fun skuMatches(sku: String?, wanted: String): Boolean {
+        if (sku.isNullOrBlank()) return false
+        val a = sku.trim().trimStart('0')
+        val b = wanted.trim().trimStart('0')
+        return a.isNotEmpty() && a.equals(b, ignoreCase = true)
     }
 
     private fun collectOffers(value: Any?, out: MutableList<OfferInfo>, depth: Int) {
@@ -398,6 +413,15 @@ object PriceScraper {
         when (value) {
             is JSONArray -> for (i in 0 until value.length()) collectOffers(value.opt(i), out, depth + 1)
             is JSONObject -> {
+                // AggregateOffer con la lista de ofertas adentro: las ofertas individuales
+                // tienen precio Y disponibilidad reales. El resumen (lowPrice) no trae
+                // disponibilidad, así que si se lo usara parecería "con stock" aunque todas
+                // las variantes estén agotadas.
+                if (value.has("offers")) {
+                    val before = out.size
+                    collectOffers(value.opt("offers"), out, depth + 1)
+                    if (out.size > before) return
+                }
                 val spec = priceFromSpecification(value.opt("priceSpecification"))
                 // Ojo: "price" puede venir como "" -> en ese caso se prueba el resto.
                 val price = PriceParser.parseAny(value.opt("price"))
@@ -405,10 +429,10 @@ object PriceScraper {
                     ?: PriceParser.parseAny(value.opt("lowPrice"))
                 val currency = value.optString("priceCurrency").ifBlank { null } ?: spec?.second
                 if (price != null) {
-                    out.add(OfferInfo(price, currency, parseAvailability(value.optString("availability"))))
+                    val sku = value.optString("sku").ifBlank { value.optJSONObject("itemOffered")?.optString("sku") }
+                        ?.ifBlank { null }
+                    out.add(OfferInfo(price, currency, parseAvailability(value.optString("availability")), sku))
                 }
-                // AggregateOffer con la lista de ofertas adentro.
-                if (value.has("offers")) collectOffers(value.opt("offers"), out, depth + 1)
             }
         }
     }
@@ -785,7 +809,8 @@ object PriceScraper {
         }
     }
 
-    private fun variantIdFrom(url: String): String? = queryParam(url, "variant") ?: queryParam(url, "skuId")
+    private fun variantIdFrom(url: String): String? =
+        queryParam(url, "variant") ?: queryParam(url, "skuId") ?: queryParam(url, "sku")
 
     private val BOT_TITLE_MARKERS = listOf(
         "just a moment", "un momento", "attention required", "access denied", "acceso denegado",

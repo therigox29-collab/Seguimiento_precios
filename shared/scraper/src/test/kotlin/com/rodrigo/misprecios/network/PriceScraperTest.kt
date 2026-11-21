@@ -111,6 +111,36 @@ class PriceScraperTest {
         assertEquals(12000.0, p.price)
     }
 
+    /** Caso real: motorola.cl (VTEX). Las dos variantes agotadas dentro de un AggregateOffer. */
+    private val motorolaJsonLd = """
+        <script type="application/ld+json">{"@context":"https://schema.org/","@type":"Product",
+        "@id":"https://www.motorola.cl/moto-buds-loop-swarovski/p","name":"moto buds loop by Swarovski",
+        "sku":"00000402","offers":{"@type":"AggregateOffer","lowPrice":99990,"highPrice":249990,
+        "priceCurrency":"CLP","offers":[
+          {"@type":"Offer","price":99990,"priceCurrency":"CLP","availability":"http://schema.org/OutOfStock","sku":"00000401"},
+          {"@type":"Offer","price":249990,"priceCurrency":"CLP","availability":"http://schema.org/OutOfStock","sku":"00000402"}
+        ],"offerCount":2}}</script>
+        <h1>moto buds loop by Swarovski</h1>
+    """
+
+    @Test
+    fun aggregateOfferConTodasLasVariantesAgotadas() {
+        val p = scrape(motorolaJsonLd, url = "https://www.motorola.cl/moto-buds-loop-swarovski/p")
+        assertFalse(p.inStock)
+        assertEquals(99990.0, p.price)
+    }
+
+    @Test
+    fun aggregateOfferUsaLaVarianteDelSkuIdDeLaUrl() {
+        val p = scrape(
+            motorolaJsonLd,
+            url = "https://www.motorola.cl/moto-buds-loop-swarovski/p?skuId=402&srsltid=abc"
+        )
+        assertFalse(p.inStock)
+        assertEquals(249990.0, p.price)
+        assertEquals("$", p.currencySymbol)
+    }
+
     @Test
     fun openGraphConNameEnLugarDeProperty() {
         val p = scrape(
