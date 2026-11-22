@@ -7,12 +7,18 @@ import com.rodrigo.misprecios.network.ScrapedProduct
 import com.rodrigo.misprecios.notifications.NotificationHelper
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import org.json.JSONArray
+import org.json.JSONObject
 
 class ProductRepository(context: Context) {
 
     private val dao = AppDatabase.getInstance(context).productDao()
     private val notificationHelper = NotificationHelper(context)
     private val settingsRepository = SettingsRepository(context)
+
+    /** Resultado de importar una copia de seguridad: cuántos productos se agregaron y cuántos
+     * ya existían (mismo URL) y por lo tanto se dejaron como estaban, para no duplicar. */
+    data class BackupResult(val imported: Int, val skipped: Int)
 
     fun observeAll(): Flow<List<Product>> = dao.observeAll()
 
@@ -51,7 +57,124 @@ class ProductRepository(context: Context) {
         return id
     }
 
+    /**
+     * Actualiza solo los datos editables de un producto ya guardado (URL, alias, frase de
+     * "agotado" y selector de precio), sin tocar el precio actual ni el historial. Los cambios
+     * se aplican recién en la próxima revisión (automática o con "Revisar ahora").
+     */
+    suspend fun updateProductFields(
+        productId: Long,
+        url: String,
+        alias: String,
+        outOfStockKeyword: String,
+        priceSelector: String
+    ) {
+        val existing = dao.getById(productId) ?: return
+        val updated = existing.copy(
+            url = url.trim().ifBlank { existing.url },
+            alias = alias.trim().ifBlank { existing.alias },
+            outOfStockKeyword = outOfStockKeyword.trim().ifBlank { null },
+            priceSelector = priceSelector.trim().ifBlank { null }
+        )
+        dao.update(updated)
+    }
+
     suspend fun deleteProduct(product: Product) = dao.delete(product)
+
+    /**
+     * Arma un archivo de respaldo en formato JSON con todos los productos guardados y su
+     * historial de precios completo, para que el usuario lo guarde donde quiera (Drive, el
+     * propio celular, etc.) y pueda recuperarlo si alguna vez tiene que reinstalar la app.
+     */
+    suspend fun exportBackupJson(): String {
+        val products = dao.getAll()
+        val root = JSONObject()
+        root.put("app", "MisPrecios")
+        root.put("backupVersion", 1)
+        root.put("exportedAt", System.currentTimeMillis())
+
+        val productsArray = JSONArray()
+        for (p in products) {
+            val obj = JSONObject()
+            obj.put("url", p.url)
+            obj.put("alias", p.alias)
+            obj.put("name", p.name)
+            obj.put("imageUrl", p.imageUrl)
+            obj.put("storeName", p.storeName)
+            obj.put("currentPrice", p.currentPrice)
+            obj.put("previousPrice", p.previousPrice)
+            obj.put("currencySymbol", p.currencySymbol)
+            obj.put("lastCheckedAt", p.lastCheckedAt)
+            obj.put("inStock", p.inStock)
+            obj.put("outOfStockKeyword", p.outOfStockKeyword)
+            obj.put("priceSelector", p.priceSelector)
+
+            val historyArray = JSONArray()
+            for (h in dao.getHistoryOnce(p.id)) {
+                val historyObj = JSONObject()
+                historyObj.put("price", h.price)
+                historyObj.put("checkedAt", h.checkedAt)
+                historyArray.put(historyObj)
+            }
+            obj.put("history", historyArray)
+
+            productsArray.put(obj)
+        }
+        root.put("products", productsArray)
+        return root.toString(2)
+    }
+
+    /**
+     * Carga productos desde un archivo de respaldo generado por [exportBackupJson]. Los
+     * productos cuyo URL ya existe en la base se omiten (para no duplicar si el usuario
+     * importa el mismo archivo más de una vez); el resto se agrega como nuevo, con su
+     * historial de precios completo.
+     */
+    suspend fun importBackupJson(json: String): BackupResult {
+        val root = JSONObject(json)
+        val productsArray = root.optJSONArray("products") ?: JSONArray()
+        var imported = 0
+        var skipped = 0
+
+        for (i in 0 until productsArray.length()) {
+            val obj = productsArray.optJSONObject(i) ?: continue
+            val url = obj.optString("url").ifBlank { continue }
+            if (dao.getByUrl(url) != null) {
+                skipped++
+                continue
+            }
+
+            val product = Product(
+                url = url,
+                alias = obj.optString("alias", url),
+                name = obj.optString("name", url),
+                imageUrl = if (obj.isNull("imageUrl")) null else obj.optString("imageUrl").ifBlank { null },
+                storeName = obj.optString("storeName", "Tienda"),
+                currentPrice = obj.optDouble("currentPrice", 0.0),
+                previousPrice = if (obj.isNull("previousPrice")) null else obj.optDouble("previousPrice"),
+                currencySymbol = obj.optString("currencySymbol", "$"),
+                lastCheckedAt = obj.optLong("lastCheckedAt", System.currentTimeMillis()),
+                inStock = obj.optBoolean("inStock", true),
+                outOfStockKeyword = if (obj.isNull("outOfStockKeyword")) null else obj.optString("outOfStockKeyword").ifBlank { null },
+                priceSelector = if (obj.isNull("priceSelector")) null else obj.optString("priceSelector").ifBlank { null }
+            )
+            val newId = dao.insert(product)
+
+            val historyArray = obj.optJSONArray("history") ?: JSONArray()
+            for (j in 0 until historyArray.length()) {
+                val historyObj = historyArray.optJSONObject(j) ?: continue
+                dao.insertHistory(
+                    PriceHistoryEntry(
+                        productId = newId,
+                        price = historyObj.optDouble("price", 0.0),
+                        checkedAt = historyObj.optLong("checkedAt", System.currentTimeMillis())
+                    )
+                )
+            }
+            imported++
+        }
+        return BackupResult(imported = imported, skipped = skipped)
+    }
 
     /**
      * Revisa todos los productos guardados: consulta el precio actual, lo compara con el
