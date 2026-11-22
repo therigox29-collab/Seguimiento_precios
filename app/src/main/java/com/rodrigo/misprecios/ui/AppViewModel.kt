@@ -66,8 +66,35 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** Actualiza los datos editables de un producto ya guardado (ver pantalla "Editar producto"). */
+    fun updateProductFields(
+        productId: Long,
+        url: String,
+        alias: String,
+        outOfStockKeyword: String,
+        priceSelector: String
+    ) {
+        viewModelScope.launch {
+            repository.updateProductFields(productId, url, alias, outOfStockKeyword, priceSelector)
+        }
+    }
+
     fun deleteProduct(product: Product) {
         viewModelScope.launch { repository.deleteProduct(product) }
+    }
+
+    /** Genera el contenido del archivo de respaldo (JSON) y lo entrega por callback. */
+    fun exportBackup(onReady: (String) -> Unit) {
+        viewModelScope.launch { onReady(repository.exportBackupJson()) }
+    }
+
+    /** Importa productos desde el contenido de un archivo de respaldo (JSON). */
+    fun importBackup(json: String, onResult: (ProductRepository.BackupResult) -> Unit) {
+        viewModelScope.launch {
+            val result = runCatching { repository.importBackupJson(json) }
+                .getOrElse { ProductRepository.BackupResult(imported = 0, skipped = 0) }
+            onResult(result)
+        }
     }
 
     /**
