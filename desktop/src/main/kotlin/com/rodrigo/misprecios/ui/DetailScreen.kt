@@ -15,6 +15,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -48,7 +49,7 @@ import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DetailScreen(productId: Long, onBack: () -> Unit) {
+fun DetailScreen(productId: Long, onBack: () -> Unit, onEdit: () -> Unit) {
     var product by remember { mutableStateOf<Product?>(null) }
     var history by remember { mutableStateOf<List<PriceHistoryEntry>>(emptyList()) }
     val scope = rememberCoroutineScope()
@@ -70,6 +71,9 @@ fun DetailScreen(productId: Long, onBack: () -> Unit) {
                     }
                 },
                 actions = {
+                    IconButton(onClick = onEdit) {
+                        Icon(Icons.Filled.Edit, contentDescription = "Editar")
+                    }
                     product?.let { p ->
                         IconButton(onClick = {
                             scope.launch {
