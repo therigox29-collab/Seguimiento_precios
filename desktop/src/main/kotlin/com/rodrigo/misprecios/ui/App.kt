@@ -14,6 +14,7 @@ sealed class Screen {
     object Home : Screen()
     object Add : Screen()
     data class Detail(val productId: Long) : Screen()
+    data class Edit(val productId: Long) : Screen()
     object Settings : Screen()
 }
 
@@ -50,7 +51,12 @@ fun App() {
             )
             is Screen.Detail -> DetailScreen(
                 productId = current.productId,
-                onBack = { screen = Screen.Home }
+                onBack = { screen = Screen.Home },
+                onEdit = { screen = Screen.Edit(current.productId) }
+            )
+            is Screen.Edit -> EditProductScreen(
+                productId = current.productId,
+                onDone = { screen = Screen.Detail(current.productId) }
             )
             is Screen.Settings -> SettingsScreen(
                 onBack = { screen = Screen.Home }
