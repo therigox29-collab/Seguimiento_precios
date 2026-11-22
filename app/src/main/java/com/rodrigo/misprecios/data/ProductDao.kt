@@ -23,6 +23,9 @@ interface ProductDao {
     @Query("SELECT * FROM products WHERE id = :productId")
     suspend fun getById(productId: Long): Product?
 
+    @Query("SELECT * FROM products WHERE url = :url LIMIT 1")
+    suspend fun getByUrl(url: String): Product?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(product: Product): Long
 
@@ -34,6 +37,9 @@ interface ProductDao {
 
     @Query("SELECT * FROM price_history WHERE productId = :productId ORDER BY checkedAt ASC")
     fun observeHistory(productId: Long): Flow<List<PriceHistoryEntry>>
+
+    @Query("SELECT * FROM price_history WHERE productId = :productId ORDER BY checkedAt ASC")
+    suspend fun getHistoryOnce(productId: Long): List<PriceHistoryEntry>
 
     @Insert
     suspend fun insertHistory(entry: PriceHistoryEntry)
