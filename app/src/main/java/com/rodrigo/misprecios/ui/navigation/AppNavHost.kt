@@ -8,6 +8,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.rodrigo.misprecios.ui.AppViewModel
 import com.rodrigo.misprecios.ui.screens.AddProductScreen
+import com.rodrigo.misprecios.ui.screens.EditProductScreen
 import com.rodrigo.misprecios.ui.screens.HomeScreen
 import com.rodrigo.misprecios.ui.screens.ProductDetailScreen
 import com.rodrigo.misprecios.ui.screens.SettingsScreen
@@ -17,7 +18,9 @@ object Routes {
     const val ADD_PRODUCT = "add_product"
     const val SETTINGS = "settings"
     const val DETAIL = "detail/{productId}"
+    const val EDIT = "edit/{productId}"
     fun detail(productId: Long) = "detail/$productId"
+    fun edit(productId: Long) = "edit/$productId"
 }
 
 @Composable
@@ -30,7 +33,8 @@ fun AppNavHost(viewModel: AppViewModel) {
                 viewModel = viewModel,
                 onAddProduct = { navController.navigate(Routes.ADD_PRODUCT) },
                 onOpenSettings = { navController.navigate(Routes.SETTINGS) },
-                onOpenProduct = { id -> navController.navigate(Routes.detail(id)) }
+                onOpenProduct = { id -> navController.navigate(Routes.detail(id)) },
+                onEditProduct = { id -> navController.navigate(Routes.edit(id)) }
             )
         }
         composable(Routes.ADD_PRODUCT) {
@@ -50,7 +54,19 @@ fun AppNavHost(viewModel: AppViewModel) {
             ProductDetailScreen(
                 viewModel = viewModel,
                 productId = productId,
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popBackStack() },
+                onEdit = { navController.navigate(Routes.edit(productId)) }
+            )
+        }
+        composable(
+            route = Routes.EDIT,
+            arguments = listOf(navArgument("productId") { type = NavType.LongType })
+        ) { backStackEntry ->
+            val productId = backStackEntry.arguments?.getLong("productId") ?: 0L
+            EditProductScreen(
+                viewModel = viewModel,
+                productId = productId,
+                onDone = { navController.popBackStack() }
             )
         }
     }
