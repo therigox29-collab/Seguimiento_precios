@@ -138,7 +138,8 @@ class ProductRepository(context: Context) {
 
         for (i in 0 until productsArray.length()) {
             val obj = productsArray.optJSONObject(i) ?: continue
-            val url = obj.optString("url").ifBlank { continue }
+            val url = obj.optString("url")
+            if (url.isBlank()) continue
             if (dao.getByUrl(url) != null) {
                 skipped++
                 continue
