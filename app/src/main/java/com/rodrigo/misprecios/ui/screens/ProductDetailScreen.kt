@@ -15,6 +15,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -48,7 +49,12 @@ import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ProductDetailScreen(viewModel: AppViewModel, productId: Long, onBack: () -> Unit) {
+fun ProductDetailScreen(
+    viewModel: AppViewModel,
+    productId: Long,
+    onBack: () -> Unit,
+    onEdit: () -> Unit
+) {
     val product by viewModel.observeProduct(productId).collectAsState(initial = null)
     val history by viewModel.observeHistory(productId).collectAsState(initial = emptyList())
     val format = NumberFormat.getNumberInstance()
@@ -65,6 +71,9 @@ fun ProductDetailScreen(viewModel: AppViewModel, productId: Long, onBack: () -> 
                     }
                 },
                 actions = {
+                    IconButton(onClick = onEdit) {
+                        Icon(Icons.Filled.Edit, contentDescription = "Editar")
+                    }
                     product?.let { p ->
                         IconButton(onClick = {
                             viewModel.deleteProduct(p)
