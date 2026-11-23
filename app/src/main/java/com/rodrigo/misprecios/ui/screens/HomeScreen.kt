@@ -1,6 +1,8 @@
 package com.rodrigo.misprecios.ui.screens
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -51,7 +53,8 @@ fun HomeScreen(
     viewModel: AppViewModel,
     onAddProduct: () -> Unit,
     onOpenSettings: () -> Unit,
-    onOpenProduct: (Long) -> Unit
+    onOpenProduct: (Long) -> Unit,
+    onEditProduct: (Long) -> Unit
 ) {
     val products by viewModel.products.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
@@ -104,22 +107,28 @@ fun HomeScreen(
                     .padding(padding)
             ) {
                 items(products, key = { it.id }) { product ->
-                    ProductRow(product = product, onClick = { onOpenProduct(product.id) })
+                    ProductRow(
+                        product = product,
+                        onClick = { onOpenProduct(product.id) },
+                        onLongClick = { onEditProduct(product.id) }
+                    )
                 }
             }
         }
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ProductRow(product: Product, onClick: () -> Unit) {
+private fun ProductRow(product: Product, onClick: () -> Unit, onLongClick: () -> Unit) {
     val format = NumberFormat.getNumberInstance()
 
     Card(
-        onClick = onClick,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         shape = RoundedCornerShape(16.dp),
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier
+            .fillMaxWidth()
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
     ) {
         Row(
             modifier = Modifier.padding(12.dp),
